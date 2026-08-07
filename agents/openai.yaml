@@ -1,4 +1,0 @@
-interface:
-  display_name: "视频分镜拉片拆解"
-  short_description: "从样片自动识别剪辑点、抽取关键帧并生成专业分镜拉片表格"
-  default_prompt: "使用 $video-storyboard-breakdown 拆解我提供的样片，并输出带关键帧的专业分镜拉片 Excel。"
