@@ -4,9 +4,22 @@
 
 适用于 MP4、MOV、MKV、M4V、AVI 和 WebM，常见使用场景包括拉片、样片拆解、逐镜分析、景别／机位／构图判断、运镜分析、剪辑节奏总结与视觉语言提炼。
 
-![Porsche 911 Carrera 2026 样片关键帧总览](docs/images/porsche-911-sample-overview.jpg)
-
-> 上图为 25 镜案例中的 S01–S24；S25 是品牌尾板。源视频不随仓库分发。
+<table>
+  <tr>
+    <td align="center" width="33%">
+      <img src="docs/images/workbook-shot-breakdown.png" alt="分镜拆解工作表示例" width="100%"><br>
+      <sub>分镜拆解</sub>
+    </td>
+    <td align="center" width="33%">
+      <img src="docs/images/workbook-structure-language.png" alt="结构与视觉语言工作表示例" width="100%"><br>
+      <sub>结构与语言</sub>
+    </td>
+    <td align="center" width="33%">
+      <img src="docs/images/workbook-keyframe-overview.png" alt="关键帧总览工作表示例" width="100%"><br>
+      <sub>关键帧总览</sub>
+    </td>
+  </tr>
+</table>
 
 ## 能做什么
 
