@@ -53,6 +53,69 @@ async function imageDataUrl(filePath) {
 }
 
 
+function parseResolution(value) {
+  const match = String(value || "").match(/(\d+(?:\.\d+)?)\s*[×xX]\s*(\d+(?:\.\d+)?)/);
+  if (!match) return null;
+  const width = Number(match[1]);
+  const height = Number(match[2]);
+  if (!(width > 0) || !(height > 0)) return null;
+  return { width, height };
+}
+
+
+async function readImageDimensions(filePath) {
+  const bytes = await fs.readFile(filePath);
+  if (
+    bytes.length >= 24 &&
+    bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47
+  ) {
+    return { width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20) };
+  }
+  if (bytes.length >= 4 && bytes[0] === 0xff && bytes[1] === 0xd8) {
+    let offset = 2;
+    const sofMarkers = new Set([
+      0xc0, 0xc1, 0xc2, 0xc3, 0xc5, 0xc6, 0xc7,
+      0xc9, 0xca, 0xcb, 0xcd, 0xce, 0xcf,
+    ]);
+    while (offset + 9 < bytes.length) {
+      if (bytes[offset] !== 0xff) {
+        offset += 1;
+        continue;
+      }
+      while (offset < bytes.length && bytes[offset] === 0xff) offset += 1;
+      const marker = bytes[offset++];
+      if (marker === 0xd8 || marker === 0xd9 || marker === 0x01) continue;
+      if (offset + 2 > bytes.length) break;
+      const segmentLength = bytes.readUInt16BE(offset);
+      if (segmentLength < 2 || offset + segmentLength > bytes.length) break;
+      if (sofMarkers.has(marker)) {
+        return {
+          width: bytes.readUInt16BE(offset + 5),
+          height: bytes.readUInt16BE(offset + 3),
+        };
+      }
+      offset += segmentLength;
+    }
+  }
+  throw new Error(`无法读取关键帧尺寸：${filePath}`);
+}
+
+
+function fitAspectRatio(width, height, maxWidthPx = 240, maxHeightPx = 240) {
+  const aspectRatio = width / height;
+  let fittedWidth = maxWidthPx;
+  let fittedHeight = fittedWidth / aspectRatio;
+  if (fittedHeight > maxHeightPx) {
+    fittedHeight = maxHeightPx;
+    fittedWidth = fittedHeight * aspectRatio;
+  }
+  return {
+    widthPx: Math.max(1, Math.round(fittedWidth)),
+    heightPx: Math.max(1, Math.round(fittedHeight)),
+  };
+}
+
+
 function resolveFile(baseDir, filePath) {
   return path.isAbsolute(filePath) ? filePath : path.resolve(baseDir, filePath);
 }
@@ -163,6 +226,11 @@ const resolution = project.resolution || "未提供";
 const fps = project.fps ?? "未提供";
 const analysisNote = project.analysis_note || "按可见剪辑点逐镜拆分；关键帧为本镜代表帧。";
 const coreObservation = project.core_observation || "待补充整体视觉观察。";
+const sourceDimensions = parseResolution(project.resolution) || await readImageDimensions(shots[0]._resolvedKeyframe);
+const frameFit = fitAspectRatio(sourceDimensions.width, sourceDimensions.height);
+const frameWidthPx = frameFit.widthPx;
+const frameHeightPx = frameFit.heightPx;
+const imagePaddingPx = 20;
 
 main.showGridLines = false;
 main.freezePanes.freezeRows(5);
@@ -234,7 +302,7 @@ for (let index = 0; index < shots.length; index += 1) {
   const shot = shots[index];
   const rowFill = index % 2 === 0 ? colors.bodyA : colors.bodyB;
   main.getRange(`A${row}:K${row}`).format.fill = rowFill;
-  main.getRange(`A${row}:K${row}`).format.rowHeightPx = 150;
+  main.getRange(`A${row}:K${row}`).format.rowHeightPx = frameHeightPx + imagePaddingPx;
   if (!chapterColors.has(shot.chapter)) {
     chapterColors.set(shot.chapter, groupPalette[colorIndex % groupPalette.length]);
     colorIndex += 1;
@@ -254,13 +322,13 @@ for (let index = 0; index < shots.length; index += 1) {
     dataUrl,
     anchor: {
       from: { row: row - 1, col: 4 },
-      extent: { widthPx: 250, heightPx: 141 },
+      extent: { widthPx: frameWidthPx, heightPx: frameHeightPx },
     },
   });
 }
 
 const mainWidths = {
-  A: 62, B: 150, C: 76, D: 150, E: 285, F: 118,
+  A: 62, B: 150, C: 76, D: 150, E: frameWidthPx + imagePaddingPx, F: 118,
   G: 250, H: 240, I: 330, J: 285, K: 245,
 };
 for (const [column, width] of Object.entries(mainWidths)) {
@@ -401,7 +469,7 @@ overviewMeta.format = {
 overviewMeta.format.rowHeightPx = 32;
 
 const overviewColumns = ["A", "B", "C", "D"];
-for (const column of overviewColumns) overview.getRange(`${column}1:${column}${Math.ceil(shots.length / 4) * 2 + 3}`).format.columnWidthPx = 285;
+for (const column of overviewColumns) overview.getRange(`${column}1:${column}${Math.ceil(shots.length / 4) * 2 + 3}`).format.columnWidthPx = frameWidthPx + imagePaddingPx;
 
 for (let index = 0; index < shots.length; index += 1) {
   const columnIndex = index % 4;
@@ -423,12 +491,12 @@ for (let index = 0; index < shots.length; index += 1) {
     fill: "#F4EFEC",
     borders: { preset: "all", style: "thin", color: colors.border },
   };
-  overview.getRange(`${column}${imageRow}`).format.rowHeightPx = 150;
+  overview.getRange(`${column}${imageRow}`).format.rowHeightPx = frameHeightPx + imagePaddingPx;
   overview.images.add({
     dataUrl: await imageDataUrl(shot._resolvedKeyframe),
     anchor: {
       from: { row: imageRow - 1, col: columnIndex },
-      extent: { widthPx: 250, heightPx: 141 },
+      extent: { widthPx: frameWidthPx, heightPx: frameHeightPx },
     },
   });
 }
